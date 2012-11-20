@@ -83,8 +83,38 @@ module Lims::Core
     let(:parameters) {}
     let(:creator) {}
     let(:study) {} 
+    let(:expected_items) {}
+    let(:expected_pipeline) {}
+    let(:expected_study) {}
+    let(:expected_creator) {}
+    let(:expected_state) {}
+    let(:expected_parameter) {}
 
     it_behaves_like "updating the order"
+  end
+
+  shared_examples_for "modifiable order" do
+    let(:event) {  }
+    let(:expected_status) { order.status  }
+    let(:items) {}
+    let(:pipeline) {}
+    let(:state) {}
+    let(:parameters) {}
+    let(:creator) {}
+    let(:study) {} 
+    let(:expected_items) { order_items}
+    let(:expected_pipeline) {}
+    let(:expected_study) {}
+    let(:expected_creator) {}
+    let(:expected_state) {}
+    let(:expected_parameter) {}
+    context "modify state" do
+      let(:new_state) { {"my state" => "new" } }
+      let(:state) { new_state }
+      let(:expected_state) { state }
+      
+      it_behaves_like "updating the order"
+    end
   end
   describe Organization::Order do
     include_context "use core context service", :items, :orders, :studies, :users 
@@ -103,7 +133,7 @@ module Lims::Core
             }
           }
           it_behaves_like "startable"
-          #it_behaves_like "modifiable order"
+          it_behaves_like "modifiable order"
 
         end
       end
