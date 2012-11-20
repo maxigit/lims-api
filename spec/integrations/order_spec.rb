@@ -45,7 +45,7 @@ module Lims::Core
 
 
       update_action.status.should == 200
-      update_action.body.should.match_json update_expected_json
+      update_action.body.should match_json update_expected_json
 
     end
 
@@ -58,7 +58,7 @@ module Lims::Core
 
       reloaded = get order_url
       reloaded.status.should == 200
-      reloaded.body.should.match_json order_json
+      reloaded.body.should match_json order_json
 
     end
   end
@@ -88,7 +88,7 @@ module Lims::Core
     let(:expected_study) {}
     let(:expected_creator) {}
     let(:expected_state) {}
-    let(:expected_parameter) {}
+    let(:expected_parameters) {}
 
     it_behaves_like "updating the order"
   end
@@ -107,7 +107,7 @@ module Lims::Core
     let(:expected_study) {}
     let(:expected_creator) {}
     let(:expected_state) {}
-    let(:expected_parameter) {}
+    let(:expected_parameters) {}
     context "modify state" do
       let(:new_state) { {"my state" => "new" } }
       let(:state) { new_state }

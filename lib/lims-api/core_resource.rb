@@ -70,18 +70,13 @@ module Lims::Api
           action = @context.create_action(action_class, attributes.merge(:order_uuid => uuid))
           result = @context.execute_action(action)
 
-          return self
-
           # We remove the uuid key so the only remaining one
           # is the object itself
           new_uuid = result.delete(:uuid)
           type = result.keys.first
           object = result[type]
 
-          # we probably could use the resource itself
-          #
-          # instead of creating a new one
-          @context.resource_for(object, type, uuid)
+          @context.resource_for(object, type, new_uuid)
     }
     end
 

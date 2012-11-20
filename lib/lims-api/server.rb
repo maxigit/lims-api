@@ -168,6 +168,7 @@ module Lims
       # method should return nil, which will cause the response to be an HTTP 406 (Content
       # not acceptable) containing a general error response body.
       after(:status => [ 200, 201 ]) do
+        debugger
         encoder = response.body.encoder_for(request.accept) or
         general_error(406, 'unacceptable content type requested')
 
