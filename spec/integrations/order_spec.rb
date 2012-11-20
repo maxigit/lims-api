@@ -82,12 +82,12 @@ module Lims::Core
     let(:state) {}
     let(:parameters) {}
     let(:creator) {}
-    let(:study) {}
+    let(:study) {} 
 
     it_behaves_like "updating the order"
   end
   describe Organization::Order do
-    include_context "use core context service", :orders
+    include_context "use core context service", :items, :orders, :studies, :users 
     include_context "JSON"
     let(:model) { "orders" }
 
@@ -95,7 +95,7 @@ module Lims::Core
     context "#update" do
       include_context "order saved", "11111111-2222-3333-4444-555555555555"
       context "pending order" do
-        let(:order) { described_class.new() }
+        let(:order) { described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()) }
         context "with items" do
           let(:order_items) { { "pending" => Organization::Order::Item.new(:uuid => "pending uuid"),
               "in_progress" => Organization::Order::Item.new(:uuid => "in_progress uuid").tap { |i| i.start! },

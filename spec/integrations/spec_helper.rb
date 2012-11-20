@@ -4,9 +4,13 @@ require 'lims-api/context_service'
 require 'lims-core'
 require 'lims-core/persistence/sequel'
 
+require 'logger'
+
 def connect_db(env)
   config = YAML.load_file(File.join('config','database.yml'))
-  Sequel.connect(config[env.to_s])
+  loggers = []
+  loggers << Logger.new($stdout) if ENV['LOG_SQL']
+  Sequel.connect(config[env.to_s], :logger => loggers)
 end
 
 def set_uuid(session, object, uuid)
@@ -22,8 +26,10 @@ shared_context 'use core context service' do |*tables|
 
   before(:each) do
     app.set(:context_service, context_service)
-    db[:uuid_resources].delete
-    tables.each { |table| db[table].delete }
+    db.transaction do
+      db[:uuid_resources].delete
+      tables.each { |table| db[table].delete }
+    end
   end
 end
 
@@ -37,7 +43,7 @@ end
 shared_context "use generated uuid" do 
   let! (:uuid) {
     '11111111-2222-3333-4444-555555555555'.tap do |uuid|
-    Lims::Core::Uuids::UuidResource.stub(:generate_uuid).and_return(uuid)
+      Lims::Core::Uuids::UuidResource.stub(:generate_uuid).and_return(uuid)
     end
   }
 end
