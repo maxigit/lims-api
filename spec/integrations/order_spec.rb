@@ -40,7 +40,7 @@ module Lims::Core
     let(:update_expected_json) {
       update_parameters.merge(:result => order_json, :uuid => order_uuid)
     }
-    let(:update_action) { put order_url, update_parameters }
+    let(:update_action) { put order_url, update_parameters.to_json }
     it "return the correct json" do
 
 
@@ -124,8 +124,18 @@ module Lims::Core
 
     context "#update" do
       include_context "order saved", "11111111-2222-3333-4444-555555555555"
-      context "pending order" do
+      context "draft order" do
         let(:order) { described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()) }
+        it "can't be started" 
+      end
+      context "pending order" do
+        let(:order_items) { {} }
+        let(:order) { described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()).tap do |o|
+         o.build
+       end
+     }
+
+     it { order.status.should == "pending" }
         context "with items" do
           let(:order_items) { { "pending" => Organization::Order::Item.new(:uuid => "pending uuid"),
               "in_progress" => Organization::Order::Item.new(:uuid => "in_progress uuid").tap { |i| i.start! },

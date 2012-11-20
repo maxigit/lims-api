@@ -1,5 +1,6 @@
 require 'lims-core'
 require 'lims-api/json_encoder'
+require 'lims-api/json_decoder'
 
 require 'lims-api/resource'
 require 'lims-api/struct_stream'
@@ -60,11 +61,28 @@ module Lims::Api
       self
     end
 
-    create_action(:updater) do |session, attributes|
-      object(session).tap do |o|
-        o.update(attributes)
-      end
-      self
+    def updater(attributes)
+      lambda {
+        debugger
+        model_class = @context.find_model_class(model_name)
+        raise "Wrong model" unless model_class
+        action_class = model_class::Update
+          action = @context.create_action(action_class, attributes.merge(:order_uuid => uuid))
+          result = @context.execute_action(action)
+
+          return self
+
+          # We remove the uuid key so the only remaining one
+          # is the object itself
+          new_uuid = result.delete(:uuid)
+          type = result.keys.first
+          object = result[type]
+
+          # we probably could use the resource itself
+          #
+          # instead of creating a new one
+          @context.resource_for(object, type, uuid)
+    }
     end
 
     create_action(:deleter) do |session|
@@ -117,5 +135,24 @@ module Lims::Api
     def self.encoder_class_map 
       Encoders.mash { |k| [k::ContentType, k] }
     end
+
+      #==================================================
+      # Decoders
+      #==================================================
+
+      # Specific decoder
+      module  Decoder
+        include Resource::Decoder
+      end
+
+      Decoders = [
+        class JsonDecoder
+          include Decoder
+          include Lims::Api::JsonDecoder
+        end
+      ]
+      def self.decoder_class_map 
+        @decoder ||= Decoders.mash { |k| [k::ContentType, k] }
+      end
   end
 end

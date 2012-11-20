@@ -110,15 +110,15 @@ module Lims
         include Resource::Decoder
       end
 
-        Decoders = [
-          class JsonDecoder
-            include Decoder
-            include Lims::Api::JsonDecoder
-          end
-        ]
-        def self.decoder_class_map 
-          @decoder ||= Decoders.mash { |k| [k::ContentType, k] }
+      Decoders = [
+        class JsonDecoder
+          include Decoder
+          include Lims::Api::JsonDecoder
         end
+      ]
+      def self.decoder_class_map 
+        @decoder ||= Decoders.mash { |k| [k::ContentType, k] }
       end
     end
   end
+end
