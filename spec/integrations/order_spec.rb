@@ -50,7 +50,7 @@ module Lims::Core
     end
 
     it "update the object" do
-      upate_action # update the order
+      update_action # update the order
 
       body = JSON::parse(update_action.body)
       body[:uuid].should == order_uuid
