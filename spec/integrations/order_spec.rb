@@ -126,7 +126,10 @@ module Lims::Core
       include_context "order saved", "11111111-2222-3333-4444-555555555555"
       context "draft order" do
         let(:order) { described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()) }
-        it "can't be started" 
+        it_behaves_like "doesn't accept event", :start
+          it_behaves_like "modifiable order"
+          it_behaves_like "modifiable order", :build, "pending"
+          it_behaves_like "accept event", :build, "pending"
       end
       context "pending order" do
         let(:order_items) { {} }
@@ -143,8 +146,9 @@ module Lims::Core
             }
           }
           it_behaves_like "startable"
+          it_behaves_like "accept event", :start, "in_progress" # replace startable
           it_behaves_like "modifiable order"
-
+          it_behaves_like "not updating variable", :creator
         end
       end
     end
