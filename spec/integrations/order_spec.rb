@@ -1,157 +1,271 @@
 require 'spec_helper'
 
 require 'lims-api/context_service'
+require 'lims-api/resource_shared'
 require 'lims-core'
 require 'lims-core/persistence/sequel'
 
 require 'integrations/lab_resource_shared'
-require 'lims-api/resource_shared'
 require 'integrations/spec_helper'
 
 module Lims::Core
 
-  shared_examples_for "updating the order" do
-    let(:order_url) { "#{order_uuid}" }
-    let(:update_parameters) {  {}.tap do |h|
-        h["event"] = event if event
-        h["items"] = items if items
-        h["state"] = state if state
+  shared_context "json order" do
+    let(:expected_json) {
+          action_url = "http://example.org/#{uuid}"
+          user_url = "http://example.org/#{user_uuid}"
+          study_url = "http://example.org/#{study_uuid}"
+
+          {:order => {
+            :actions => {:read => action_url, :create => action_url, :update => action_url, :delete => action_url},
+            :uuid => uuid, 
+            :creator => {
+              :actions => {:read => user_url, :create => user_url, :update => user_url, :delete => user_url},
+              :uuid => user_uuid 
+            },
+            :pipeline => order_pipeline,
+            :status => order_status,
+            :parameters => order_parameters,
+            :state => order_state,
+            :study => {
+              :actions => {:create => study_url, :delete => study_url, :read => study_url, :update => study_url},
+              :uuid => study_uuid 
+            },
+            :cost_code => order_cost_code,
+            :items => order_items
+          }}
+    }  
+  end
+
+  shared_context "set user and study uuid" do
+    let(:study_uuid) { "55555555-2222-3333-6666-777777777777".tap do |uuid|
+      store.with_session do |session|
+        study = Lims::Core::Organization::Study.new
+        set_uuid(session, study, uuid)
       end
-    }
+    end
+    } 
 
-    let(:order_json) { {
-        :status => expected_status,
-        :actions => {
-          :create => "/orders",
-          :update => order_url,
-          :read => order_url,
-          :delete => order_url
-        },
-        :items => expected_items,
-        :pipeline => expected_pipeline,
-        :study => expected_study,
-        :creator => expected_creator,
-        :state => expected_state,
-        :parameters => expected_parameters
-      }.tap do |h|
-
+    let(:user_uuid) { "66666666-2222-4444-9999-000000000000".tap do |uuid|
+      store.with_session do |session|
+        user = Lims::Core::Organization::User.new
+        set_uuid(session, user, uuid)
       end
+    end
     }
-    let(:update_expected_json) {
-      update_parameters.merge(:result => order_json, :uuid => order_uuid)
-    }
-    let(:update_action) { put order_url, update_parameters.to_json }
-    it "return the correct json" do
+  end 
 
+  shared_examples_for "updated order" do
+    it "succeeds to update the order" do
+      update_action.status.should == 200 
+    end
 
-      update_action.status.should == 200
-      update_action.body.should match_json update_expected_json
-
+    it "returns the expected json" do
+      update_action.body.should match_json(expected_json) 
     end
 
     it "update the object" do
-      update_action # update the order
-
       body = JSON::parse(update_action.body)
-      body[:uuid].should == order_uuid
-      body[:order][:actions][:read].should == order_url
+      body["order"]["uuid"].should == uuid
+      body["order"]["actions"]["read"].should == "http://example.org#{url}"
 
-      reloaded = get order_url
-      reloaded.status.should == 200
-      reloaded.body.should match_json order_json
-
+      reloaded_order = get url
+      reloaded_order.status.should == 200
+      reloaded_order.body.should match_json(expected_json)
     end
   end
 
-  shared_examples_for "order saved" do |uuid|
-    let!(:order_uuid) {
+
+  shared_context "save order" do |uuid|
+    let!(:uuid) {
       store.with_session do |session|
         order_items.each do |role, item|
           order[role] = item
         end
         set_uuid(session, order, uuid)
+        set_uuid(session, order.creator, user_uuid)
+        set_uuid(session, order.study, study_uuid)
       end
       uuid
     }
   end
-  shared_examples_for "startable" do
-    let(:event) { "start" }
-    let(:expected_status) { "in_progress" }
-    let(:items) {}
-    let(:pipeline) {}
-    let(:state) {}
-    let(:parameters) {}
-    let(:creator) {}
-    let(:study) {} 
-    let(:expected_items) {}
-    let(:expected_pipeline) {}
-    let(:expected_study) {}
-    let(:expected_creator) {}
-    let(:expected_state) {}
-    let(:expected_parameters) {}
 
-    it_behaves_like "updating the order"
+
+  shared_context "setup order" do |*events|
+    let(:order) { 
+      described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()).tap { |o| 
+        if events
+          events.each do |event|
+            o.send(event)
+          end
+        end 
+        }}
   end
 
-  shared_examples_for "modifiable order" do
-    let(:event) {  }
-    let(:expected_status) { order.status  }
-    let(:items) {}
-    let(:pipeline) {}
-    let(:state) {}
-    let(:parameters) {}
-    let(:creator) {}
-    let(:study) {} 
-    let(:expected_items) { order_items}
-    let(:expected_pipeline) {}
-    let(:expected_study) {}
-    let(:expected_creator) {}
-    let(:expected_state) {}
-    let(:expected_parameters) {}
-    context "modify state" do
-      let(:new_state) { {"my state" => "new" } }
-      let(:state) { new_state }
-      let(:expected_state) { state }
-      
-      it_behaves_like "updating the order"
+
+  shared_context "update order" do
+    let(:update_action) { put url, update_parameters.to_json }  
+  end
+
+  shared_examples_for "doesn't accept event" do |event|
+    context event do
+      let(:update_parameters) { {:event => event} }
+      include_context "update order"
+      it { update_action.status.should == 500 }
     end
   end
+
+  shared_examples_for "accept event and change status" do |event, status|
+    context event do
+      let(:update_parameters) { {:event => event} }
+      include_context "update order"
+
+      it "accept event" do
+        update_action.status.should == 200 
+      end
+
+      it "change status" do
+        body = JSON::parse(update_action.body)
+        body["order"]["status"].should == status
+      end 
+    end 
+  end
+
+  shared_examples_for "modify order" do |event, status|
+    context event do
+      let(:update_parameters) { {:event => event} }
+      include_context "update order"   
+      include_context "json order"
+
+      let(:order_status) { status }
+      let(:order_parameters) { {} }
+      let(:order_state) { {} }
+      let(:order_pipeline) { order.pipeline }
+      let(:order_cost_code) { order.cost_code }
+
+      it_behaves_like "updated order"  
+    end
+  end
+
+  shared_examples_for "not updating variable" do |key|
+    include_context "update order"
+    context key do
+      let(:update_parameters) { {key => "value"}}
+      it "fail" do
+        expect { update_action }.to raise_error 
+      end
+    end    
+  end
+
+  shared_examples_for "updating variable" do |key, value|
+    include_context "update order"
+    context key do
+      let(:update_parameters) { {key => value} }
+      it {
+        body = JSON::parse(update_action.body)
+        body["order"][key.to_s].should == value
+      }
+    end
+  end
+
   describe Organization::Order do
-    include_context "use core context service", :items, :orders, :studies, :users 
+    include_context "use core context service", :items, :orders, :studies, :users, :uuid_resources 
     include_context "JSON"
-    let(:model) { "orders" }
+
+    context "#create" do
+      include_context "set user and study uuid"
+      
+      context "with empty parameters" do
+        let(:url) { "/actions/create_order" }
+        let(:parameters) { {} }
+        let(:expected_json) { {"errors" => {"study" => "invalid", "cost_code" => "invalid"}} }
+        it_behaves_like "an invalid core action", 422
+      end
+
+      context "with correct parameters" do
+        include_context "use generated uuid"
+        include_context "json order"
+        let(:url) { "/orders" }
+        let(:order_items) { {
+          :source_role1 => { :status => "done", :uuid => "99999999-2222-4444-9999-000000000000"},
+          :target_role1 => { :status => "pending", :uuid => "99999999-2222-4444-9999-111111111111"}} 
+        }
+        let(:order_parameters) { {} }
+        let(:order_state) { {} }
+        let(:order_status) { "draft" }
+        let(:order_cost_code) { "cost code" }
+        let(:order_pipeline) { "pipeline" }
+        let(:sources) { {:source_role1 => "99999999-2222-4444-9999-000000000000"} }
+        let(:targets) { {:target_role1 => "99999999-2222-4444-9999-111111111111" } }
+        let(:parameters) { {:user_uuid => user_uuid, :study_uuid => study_uuid, :sources => sources, :targets => targets, :cost_code => order_cost_code, :pipeline => order_pipeline} }
+        it_behaves_like "a valid core action" do
+        end 
+      end
+    end 
 
 
     context "#update" do
-      include_context "order saved", "11111111-2222-3333-4444-555555555555"
-      context "draft order" do
-        let(:order) { described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()) }
-        it_behaves_like "doesn't accept event", :start
-          it_behaves_like "modifiable order"
-          it_behaves_like "modifiable order", :build, "pending"
-          it_behaves_like "accept event", :build, "pending"
-      end
-      context "pending order" do
-        let(:order_items) { {} }
-        let(:order) { described_class.new(:creator => Organization::User.new(), :study => Organization::Study.new()).tap do |o|
-         o.build
-       end
-     }
+      include_context "save order", "11111111-2222-3333-4444-555555555555"
+      let(:url) { "/#{uuid}" }      
+      let(:study_uuid) { "55555555-2222-3333-6666-777777777777" }
+      let(:user_uuid) { "66666666-2222-4444-9999-000000000000" }
 
-     it { order.status.should == "pending" }
+      context "draft order" do
+        include_context "setup order" 
+        let(:order_items) { {} }
+        it { order.status.should == "draft" }
+        it_behaves_like "doesn't accept event", :start
+        it_behaves_like "accept event and change status", :build, "pending"
+        it_behaves_like "updating variable", :pipeline, "new pipeline"
+        it_behaves_like "modify order", :build, "pending"
+      end
+
+      context "pending order" do
+        include_context "setup order", :build 
+        let(:order_items) { {} }
+        it { order.status.should == "pending" }
+
         context "with items" do
-          let(:order_items) { { "pending" => Organization::Order::Item.new(:uuid => "pending uuid"),
-              "in_progress" => Organization::Order::Item.new(:uuid => "in_progress uuid").tap { |i| i.start! },
-              "done" => Organization::Order::Item.new(:uuid => "done uuid").tap { |i| i.complete! }
-            }
-          }
-          it_behaves_like "startable"
-          it_behaves_like "accept event", :start, "in_progress" # replace startable
-          it_behaves_like "modifiable order"
-          it_behaves_like "not updating variable", :creator
+          #let(:order_items____) { { "pending" => Organization::Order::Item.new(:uuid => "pending uuid"),
+          #                      "in_progress" => Organization::Order::Item.new(:uuid => "in_progress uuid").tap { |i| i.start! },
+          #                      "done" => Organization::Order::Item.new(:uuid => "done uuid").tap { |i| i.complete! } } }
+
+          it_behaves_like "doesn't accept event", :build
+          it_behaves_like "accept event and change status", :start, "in_progress"
+          it_behaves_like "modify order", :start, "in_progress"
         end
+      end
+  
+      context "in_progress order" do
+        include_context "setup order", :build, :start
+        let(:order_items) { {} }
+        it { order.status.should == "in_progress" }
+        it_behaves_like "doesn't accept event", :build
+        it_behaves_like "accept event and change status", :complete, "completed"
+        it_behaves_like "modify order", :complete, "completed"
+        #it_behaves_like "not updating variable", :creator
+      end
+
+      context "failed order" do
+        include_context "setup order", :build, :start, :fail
+        let(:order_items) { {} }
+        it { order.status.should == "failed" }
+        it_behaves_like "doesn't accept event", :complete
+      end
+
+      context "completed order" do
+        include_context "setup order", :build, :start, :complete
+        let(:order_items) { {} }
+        it { order.status.should == "completed" }
+        it_behaves_like "doesn't accept event", :complete
+      end
+
+      context "cancel order" do
+        include_context "setup order", :build, :start, :cancel
+        let(:order_items) { {} }
+        it { order.status.should == "cancel" }
+        it_behaves_like "doesn't accept event", :start
       end
     end
   end
 end
-
