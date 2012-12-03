@@ -1,7 +1,6 @@
 require 'spec_helper'
 
 require 'lims-api/context_service'
-require 'lims-api/resource_shared'
 require 'lims-core'
 require 'lims-core/persistence/sequel'
 
